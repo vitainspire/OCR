@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qwen OCR Engine</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="background-effects">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i data-lucide="scan-text"></i>
+                <h1>Neural OCR Engine</h1>
+            </div>
+            <p class="subtitle">Extract content instantly from any image using Qwen2.5-VL</p>
+        </header>
+
+        <main class="glass-panel">
+            <div class="upload-section" id="drop-zone">
+                <input type="file" id="file-input" accept="image/*" hidden>
+                <div class="upload-content">
+                    <i data-lucide="image-plus" class="upload-icon"></i>
+                    <h3>Upload Image</h3>
+                    <p>Drag and drop or click to browse</p>
+                </div>
+                <img id="image-preview" class="hidden" alt="Preview">
+                <button id="remove-btn" class="hidden"><i data-lucide="x"></i></button>
+            </div>
+
+            <div class="controls">
+                <div class="input-group">
+                    <label for="mode-select">Extraction Mode</label>
+                    <select id="mode-select">
+                        <option value="ocr">Standard OCR</option>
+                        <option value="json">Structured JSON</option>
+                        <option value="markdown">Markdown Document</option>
+                    </select>
+                </div>
+                <button id="extract-btn" class="btn-primary" disabled>
+                    <i data-lucide="zap"></i> Extract Text
+                </button>
+            </div>
+
+            <div id="loading-state" class="hidden">
+                <div class="spinner"></div>
+                <p>Running Neural Inference...</p>
+            </div>
+
+            <div id="result-section" class="hidden">
+                <div class="result-header">
+                    <h3>Extraction Result</h3>
+                    <div class="metrics">
+                        <i data-lucide="timer"></i>
+                        <span id="time-metric">0.00s</span>
+                    </div>
+                </div>
+                <div class="result-content">
+                    <pre><code id="result-text"></code></pre>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+</html>
