@@ -68,8 +68,9 @@ config_path = os.path.expanduser("~/vllm_env/lib64/python3.11/site-packages/vllm
 if os.path.exists(config_path):
     with open(config_path, "r") as f:
         config_content = f.read()
-    if 'assert "factor" in rope_scaling' in config_content:
+    if 'scaling_factor = rope_scaling["factor"]' in config_content:
         config_content = config_content.replace('assert "factor" in rope_scaling', 'pass  # assert "factor" in rope_scaling')
+        config_content = config_content.replace('scaling_factor = rope_scaling["factor"]', 'scaling_factor = rope_scaling.get("factor", 1.0)')
         with open(config_path, "w") as f:
             f.write(config_content)
         print("vLLM config.py rope_scaling patched!")
