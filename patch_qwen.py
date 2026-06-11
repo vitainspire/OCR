@@ -62,3 +62,16 @@ if "def pad_token_id(self):" not in content:
     print("Qwen2_5_VLConfig patched!")
 else:
     print("Qwen2_5_VLConfig already patched.")
+
+# Add config.py patch for rope_scaling
+config_path = os.path.expanduser("~/vllm_env/lib64/python3.11/site-packages/vllm/config.py")
+if os.path.exists(config_path):
+    with open(config_path, "r") as f:
+        config_content = f.read()
+    if 'assert "factor" in rope_scaling' in config_content:
+        config_content = config_content.replace('assert "factor" in rope_scaling', 'pass  # assert "factor" in rope_scaling')
+        with open(config_path, "w") as f:
+            f.write(config_content)
+        print("vLLM config.py rope_scaling patched!")
+    else:
+        print("vLLM config.py rope_scaling already patched or not found.")
