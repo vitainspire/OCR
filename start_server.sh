@@ -34,7 +34,6 @@ if [ "$1" == "ocr" ]; then
         --max-model-len 3072 \
         --max-num-seqs 4 \
         --enable-prefix-caching \
-        --limit-mm-per-prompt image=1,video=0 \
         --host 0.0.0.0 \
         --port 8000 \
         --served-model-name ocr-engine \
