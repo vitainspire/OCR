@@ -1,0 +1,23 @@
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Databases & Local States
+*.db
+tasks.db
+benchmark_results.json
+
+# Environment
+vllm_env/
+.env
+
+# Images / Media
+images-for-testing/
+*.jpeg
+*.jpg
+*.png
+
+# Node.js
+node_modules/
+*.zip
