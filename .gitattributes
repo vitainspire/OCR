@@ -1,0 +1,3 @@
+# Ensure shell scripts always use LF endings, even when committed from Windows,
+# so they run correctly on the Linux EC2 instance (avoids $'\r' bash errors).
+*.sh text eol=lf

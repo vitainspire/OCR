@@ -12,8 +12,8 @@ After=network.target
 [Service]
 Type=simple
 User=ec2-user
-WorkingDirectory=/home/ec2-user
-ExecStart=/bin/bash /home/ec2-user/start_server.sh ocr
+WorkingDirectory=/home/ec2-user/testing
+ExecStart=/bin/bash /home/ec2-user/testing/start_server.sh ocr
 Restart=always
 RestartSec=10
 StandardOutput=syslog
@@ -33,8 +33,8 @@ After=network.target
 [Service]
 Type=simple
 User=ec2-user
-WorkingDirectory=/home/ec2-user
-ExecStart=/bin/bash /home/ec2-user/start_server.sh text
+WorkingDirectory=/home/ec2-user/testing
+ExecStart=/bin/bash /home/ec2-user/testing/start_server.sh text
 Restart=always
 RestartSec=10
 StandardOutput=syslog
