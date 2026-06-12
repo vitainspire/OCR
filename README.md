@@ -1,143 +1,128 @@
 # 🚀 The "Two-Door" Educational AI API
 ### Enterprise-Grade Parallel LLM & VLM Architecture
 
-This repository contains the complete infrastructure, crash-proof testing suite, and deployment logic for an advanced educational AI routing system. It uses a **Two-Door Architecture** capable of processing 15+ simultaneous OCR vision requests and 60+ simultaneous text-generation requests in parallel using vLLM continuous batching.
+This repository contains the complete infrastructure, crash-proof testing suite, and one-command deployment for an educational AI routing system. It uses a **Two-Door Architecture** that serves OCR vision requests and text-generation (lesson-plan) requests in parallel on a single GPU using vLLM continuous batching.
 
 ---
 
 ## 🏗️ Architecture Overview
 
-To maximize GPU utilization on a single 24GB VRAM instance, the system hosts two massive open-source models natively on exactly **different ports** acting as individual API endpoints:
+Both engines run on a single NVIDIA L4 (24 GB) instance, on different ports, as independent OpenAI-compatible API endpoints. **Both run on the same modern vLLM 0.22 environment** (`vllm_ocr_env`).
 
 * **🚪 Door 1 (OCR Vision Engine) — Port 8000**
-  * **Model:** `Qwen/Qwen2.5-VL-7B-Instruct-AWQ`
-  * **Role:** A 7-billion parameter Vision Language Model optimized for perfect handwriting and textbook OCR.
-  * **VRAM Allocation:** ~40% (9.6 GB)
+  * **Model:** `Qwen/Qwen2.5-VL-7B-Instruct-AWQ` (served as `ocr-engine`)
+  * **Role:** 7B Vision-Language model for handwriting / printed-text OCR.
+  * **GPU:** `--gpu-memory-utilization 0.40` (~6.7 GB)
 
 * **🚪 Door 2 (Creative Text Engine) — Port 8001**
-  * **Model:** `hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4` (Speculatively decoding with `Llama-3.2-1B`)
-  * **Role:** A blazing fast text generator specifically tuned with FP8 KV-Cache to batch generate highly creative lesson plans.
-  * **VRAM Allocation:** ~45% (10.8 GB)
+  * **Model:** `hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4` (served as `text-engine`)
+  * **Role:** Fast text generator for creative lesson plans.
+  * **GPU:** `--gpu-memory-utilization 0.40` (~5.4 GB)
+
+> ⚠️ **Important:** the OCR model (Qwen2.5-VL) is **only** supported by vLLM ≥ 0.7. The old vLLM 0.6.1 cannot load it and also 500s on text generation (missing `pyairports`). `setup_aws.sh` installs **vLLM 0.22.1** for both doors — do not downgrade.
 
 ---
 
-## 🛠️ Step 1: AWS Provisioning
+## ✅ Prerequisites — AWS Console (one-time per new instance)
 
-To recreate this exact setup from scratch, you must rent the correct hardware:
-1. Log into the AWS Console.
-2. Launch a new EC2 Instance: **`g6.2xlarge`** (This provides 1x NVIDIA L4 GPU with 24GB VRAM and 8 vCPUs).
-3. **AMI (Operating System):** Select **Ubuntu 22.04 LTS** (Deep Learning AMI recommended).
-4. **Storage:** Allocate at least **150 GB gp3 SSD**.
+These are AWS launch settings; they are **not** part of the repo, so set them when you create the instance:
 
----
-
-## 💻 Step 2: Server Installation
-
-SSH into your new AWS instance and run the following to install vLLM:
-
-```bash
-# Update OS and install python tools
-sudo apt update
-sudo apt install python3-venv python3-pip git -y
-
-# Create a virtual environment
-python3 -m venv vllm_env
-source vllm_env/bin/activate
-
-# Install vLLM and dependencies
-pip install vllm
-pip install qwen-vl-utils torchvision
-```
-
-**Upload the Code:** 
-Transfer this GitHub repository to the `/home/ubuntu/` directory of your AWS server.
+| Setting | Value |
+|---|---|
+| **AMI** | `ami-052db9c269f0d6a4c` — Amazon Linux 2023 **NVIDIA GPU** AMI *(region `eu-north-1`; AMI IDs are region-specific)* |
+| **Instance type** | `g6.2xlarge` (1× NVIDIA L4, 24 GB VRAM, 8 vCPU) |
+| **Root volume** | **80 GB** gp3 (the default 50 GB is too small — model download fails with "No space left on device") |
+| **Security group** | Allow inbound **TCP 22** (SSH), **8000**, and **8001** |
+| **Elastic IP** | Associate one (e.g. `13.62.96.5`) so the address is stable across restarts |
 
 ---
 
-## 🩹 Step 3: Qwen2.5-VL Monkey Patches
+## 💻 Setup — make the pipeline live (3 commands)
 
-Qwen2.5-VL has known compatibility bugs with standard vLLM chunked prefill. We have provided `patch.py`, `patch2.py`, `patch3.py`, and `patch_qwen.py`. 
+> 🖥️ **Which terminal?** These commands run **on the server**, inside an SSH session.
+> - First connect from your **laptop**: `ssh -i "path\to\written.pem" ec2-user@<ELASTIC_IP>`
+> - Wait until the prompt changes to `[ec2-user@ip-...]$` — that means you're **on the server**.
+> - Only then run the commands below. (If you see `PS C:\...>` you're still on your laptop — `bash`/`cd ~/testing` will fail there.)
 
-**You do not need to run these manually.** They are automatically executed by the `start_server.sh` script every time the server boots.
+```bash
+git clone https://github.com/vitainspire/OCR.git ~/testing
+cd ~/testing
+bash setup_aws.sh
+```
+
+`setup_aws.sh` does **everything automatically**:
+1. Installs `python3.11`, `python3.11-devel`, `python3.11-pip`, `gcc` (devel headers + gcc are required — vLLM/Triton JIT-compiles a CUDA helper at startup and crashes without them).
+2. Creates the `vllm_ocr_env` virtual environment and installs **vLLM 0.22.1**.
+3. Registers both doors as **systemd services** (`vllm-ocr`, `vllm-text`), enabled to auto-start on boot and auto-restart on crash.
+4. Starts both services and downloads the models (~12 GB total).
+
+⏱️ First run takes **~10–15 minutes** (mostly the model download). When you see this, the server is **live**:
+```
+BOTH DOORS FULLY OPERATIONAL!
+```
 
 ---
 
-## 🛡️ Step 4: Autonomous "Self-Healing" Deployment
+## 🔎 Verify it's running (on the server)
 
-To ensure you don't have to manually start the servers every time AWS boots, and to guarantee the models instantly restart if they crash (e.g., Out of Memory errors), we use Linux `systemd`.
-
-Run these exact commands in your AWS terminal:
-
-**Create Door 1 Service:**
 ```bash
-sudo nano /etc/systemd/system/vllm-ocr.service
+systemctl status vllm-ocr vllm-text     # both should be "active (running)"
+curl -s http://localhost:8000/v1/models  # -> ocr-engine
+curl -s http://localhost:8001/v1/models  # -> text-engine
 ```
-Paste this inside:
-```ini
-[Unit]
-Description=vLLM OCR Engine (Door 1)
-After=network.target
 
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu
-ExecStart=/bin/bash /home/ubuntu/start_server.sh ocr
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-*(Save and exit)*
-
-**Create Door 2 Service:**
+Quick functional test (no images needed) — Door 2:
 ```bash
-sudo nano /etc/systemd/system/vllm-text.service
+curl -s http://localhost:8001/v1/chat/completions -H "Content-Type: application/json" \
+  -d '{"model":"text-engine","messages":[{"role":"user","content":"One creative hook to teach gravity."}],"max_tokens":80}'
 ```
-Paste this inside:
-```ini
-[Unit]
-Description=vLLM Text Engine (Door 2)
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu
-ExecStart=/bin/bash /home/ubuntu/start_server.sh text
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-*(Save and exit)*
-
-**Enable and Start the Autonomous Engines:**
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable vllm-ocr.service
-sudo systemctl enable vllm-text.service
-sudo systemctl start vllm-ocr.service
-sudo systemctl start vllm-text.service
-```
-
-*(You can check if they are running via `sudo systemctl status vllm-ocr.service`)*
 
 ---
 
-## 🧪 Step 5: The Crash-Proof Parallel Benchmark
+## 🧪 Full benchmark — run from your LAPTOP (not the server)
 
-This repository includes a highly advanced benchmarking tool: `benchmark_parallel.py`.
+`benchmark_parallel.py` reads images from a **local** folder (`IMAGE_DIR`) and hits the server's public IP, so it runs on your laptop in a **local** PowerShell (`PS C:\...>`), not the SSH terminal.
 
-It utilizes `asyncio` to simultaneously hit both Door 1 and Door 2. More importantly, it uses an internal **SQLite Database** (`tasks.db`) to ensure that if the connection to AWS drops, you do not lose your generated outputs.
-
-**To test the server limits locally:**
-1. Put test images in your local `IMAGE_DIR`.
-2. Update the `SERVER_IP` inside `benchmark_parallel.py` to match your new AWS Public IP.
-3. Run the benchmark:
-```bash
-python benchmark_parallel.py
+1. Put test images in the folder set by `IMAGE_DIR` in `benchmark_parallel.py`.
+2. Set `SERVER_IP` to your instance's Elastic IP.
+3. Run:
+   ```powershell
+   cd D:\testing
+   python benchmark_parallel.py
+   ```
+Results are stored in `tasks.db`. Completed tasks are skipped on re-runs; to force a fresh run:
+```powershell
+python -c "import sqlite3;c=sqlite3.connect('tasks.db');c.execute(\"UPDATE jobs SET status='PENDING'\");c.commit()"
 ```
-If you interrupt the script and run it again, it will read the SQLite database, skip the completed tasks, and seamlessly resume from where it left off!
+
+---
+
+## 🛠️ Day-2 operations (on the server)
+
+```bash
+sudo systemctl restart vllm-ocr vllm-text   # restart both doors
+sudo systemctl stop    vllm-ocr vllm-text   # stop both
+sudo journalctl -u vllm-ocr  -f             # live OCR logs
+sudo journalctl -u vllm-text -f             # live text logs
+```
+
+To change settings (model, ports, concurrency), edit `~/testing/start_server.sh` then `sudo systemctl restart vllm-ocr vllm-text`. For example, raise OCR throughput by increasing `--max-num-seqs 4` to `8`.
+
+---
+
+## 🩺 Troubleshooting
+
+| Symptom | Cause / Fix |
+|---|---|
+| `bash: python: command not found` on the server | Use `python3`, or `source ~/vllm_ocr_env/bin/activate` first. `python` only exists inside the venv. |
+| `cd: D:\testing: No such file` / `bash: not recognized` | You're running **laptop** commands in the **server** SSH terminal (or vice-versa). Check the prompt. |
+| Download fails: `No space left on device` | Root volume too small — launch with **80 GB+**. |
+| Engine crash-loops: `gcc ... cuda_utils.c ... non-zero exit` | Missing `python3.11-devel` (Python.h). `setup_aws.sh` installs it; re-run if you skipped it. |
+| OCR door: `Qwen2_5_VLForConditionalGeneration not supported` | vLLM too old. Must be 0.22.x (handled by `setup_aws.sh`). |
+| Benchmark: `Cannot connect to host ...:8000` | Security group isn't allowing inbound 8000/8001. |
+
+---
+
+## ⚡ Faster rebuilds (optional)
+
+Instead of re-running `setup_aws.sh` (re-downloads 12 GB), create an **AMI image** of a working instance from the AWS Console. New instances launched from that AMI boot with the venv, models, and services already baked in — the pipeline comes up automatically, no setup needed.
