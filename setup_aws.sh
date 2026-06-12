@@ -17,10 +17,11 @@
 set -e
 export HF_HUB_DISABLE_XET=1   # avoid hf_xet downloader crash on model pull
 
-echo "==> Ensuring python3.11 is installed (base AMI may only ship python3.9)..."
-if ! command -v python3.11 >/dev/null 2>&1; then
-    sudo dnf install -y python3.11 python3.11-pip
-fi
+echo "==> Installing python3.11 + build deps (base AMI may ship only python3.9)..."
+# python3.11-devel (Python.h) + gcc are REQUIRED: vLLM/Triton JIT-compiles a
+# small CUDA helper at startup; without the dev headers it crashes with
+# 'subprocess.CalledProcessError: gcc ... cuda_utils.c'.
+sudo dnf install -y python3.11 python3.11-pip python3.11-devel gcc
 
 echo "==> Creating vllm_ocr_env (vLLM 0.22 — supports Qwen2.5-VL AND Llama AWQ)..."
 # Both doors run on this single modern env. Do NOT install vLLM 0.6.1:
